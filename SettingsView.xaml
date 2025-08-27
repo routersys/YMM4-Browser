@@ -65,19 +65,61 @@
                         BorderThickness="1" CornerRadius="3"
                         Background="{DynamicResource {x:Static SystemColors.ControlDarkBrushKey}}"
                         Padding="8,4" Margin="0,0,5,0">
-                    <TextBlock x:Name="VersionText"
+                    <TextBlock Text="{Binding CurrentVersionText}"
                                VerticalAlignment="Center"
                                Foreground="{DynamicResource {x:Static SystemColors.ControlLightLightBrushKey}}"/>
                 </Border>
 
-                <Border x:Name="UpdateNotification"
-                        BorderThickness="1" CornerRadius="3"
+                <Border BorderThickness="1" CornerRadius="3"
                         Padding="8,4">
+                    <Border.Style>
+                        <Style TargetType="Border">
+                            <Setter Property="Background" Value="{DynamicResource {x:Static SystemColors.ControlBrushKey}}"/>
+                            <Setter Property="BorderBrush" Value="{DynamicResource {x:Static SystemColors.ActiveBorderBrushKey}}"/>
+                            <Setter Property="Visibility" Value="Visible"/>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsUpdateAvailable}" Value="True">
+                                    <Setter Property="Background" Value="{StaticResource UpdateBrush}"/>
+                                    <Setter Property="BorderBrush" Value="#FF34C759"/>
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding UpdateMessage}" Value="{x:Null}">
+                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding UpdateMessage}" Value="">
+                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Border.Style>
                     <StackPanel Orientation="Horizontal">
-                        <Path x:Name="UpdateIcon" Width="14" Height="14" Stretch="Uniform" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                        <TextBlock x:Name="UpdateMessage"
+                        <Path Width="14" Height="14" Stretch="Uniform" VerticalAlignment="Center" Margin="0,0,8,0">
+                            <Path.Style>
+                                <Style TargetType="Path">
+                                    <Setter Property="Fill" Value="{DynamicResource {x:Static SystemColors.GrayTextBrushKey}}"/>
+                                    <Setter Property="Data" Value="M12,2A10,10 0 0,1 22,12A10,10 0 0,1 12,22A10,10 0 0,1 2,12A10,10 0 0,1 12,2M12,17A1.5,1.5 0 0,0 13.5,15.5V11A1.5,1.5 0 0,0 12,9.5A1.5,1.5 0 0,0 10.5,11V15.5A1.5,1.5 0 0,0 12,17M12,5.5A1.5,1.5 0 0,0 10.5,7A1.5,1.5 0 0,0 12,8.5A1.5,1.5 0 0,0 13.5,7A1.5,1.5 0 0,0 12,5.5Z"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsUpdateAvailable}" Value="True">
+                                            <Setter Property="Fill" Value="White"/>
+                                            <Setter Property="Data" Value="M19,9H15V3H9V9H5L12,16L19,9M5,18V20H19V18H5Z"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Path.Style>
+                        </Path>
+                        <TextBlock Text="{Binding UpdateMessage}"
                                    VerticalAlignment="Center"
-                                   TextWrapping="NoWrap"/>
+                                   TextWrapping="NoWrap">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="Foreground" Value="{DynamicResource {x:Static SystemColors.ControlTextBrushKey}}"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsUpdateAvailable}" Value="True">
+                                            <Setter Property="Foreground" Value="White"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
                     </StackPanel>
                 </Border>
             </StackPanel>
