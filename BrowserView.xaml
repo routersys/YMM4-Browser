@@ -71,7 +71,7 @@
                                 BorderThickness="{TemplateBinding BorderThickness}"
                                 CornerRadius="3">
                             <ContentPresenter HorizontalAlignment="Center"
-                                              VerticalAlignment="Center"/>
+                                       VerticalAlignment="Center"/>
                         </Border>
                     </ControlTemplate>
                 </Setter.Value>
@@ -198,6 +198,14 @@
                 </StackPanel>
 
                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+
+                    <Button Style="{StaticResource NavButtonStyle}"
+                            Command="{Binding OpenDownloaderWindowCommand}"
+                            ToolTip="ダウンロードマネージャー">
+                        <Path Style="{StaticResource IconPathStyle}"
+                                Data="M5,20H19V18H5M19,9H15V3H9V9H5L12,16L19,9Z"/>
+                    </Button>
+
                     <Button Style="{StaticResource NavButtonStyle}"
                             Command="{Binding ViewSourceCommand}"
                             ToolTip="ソース表示">

@@ -1,4 +1,5 @@
-﻿using System.Reflection;
+﻿using System;
+using System.Reflection;
 using YukkuriMovieMaker.Plugin;
 using YMM4Browser.View;
 using YMM4Browser.ViewModel;
@@ -24,6 +25,7 @@ public class YMM4BrowserPlugin : IToolPlugin
         try
         {
             BrowserSettings.InitializeSettings();
+            DownloaderSettings.InitializeSettings();
         }
         catch (Exception ex)
         {

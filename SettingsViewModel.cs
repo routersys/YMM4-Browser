@@ -181,7 +181,7 @@ namespace YMM4Browser.ViewModel
 
         private string GetCurrentVersion()
         {
-            return Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "1.1.0";
+            return Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "1.3.0";
         }
 
         private async Task CheckForUpdatesAsync()

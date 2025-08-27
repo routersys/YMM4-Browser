@@ -1,5 +1,6 @@
 ﻿using Microsoft.Web.WebView2.Core;
 using Microsoft.Web.WebView2.Wpf;
+using System;
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using System.ComponentModel;
@@ -9,7 +10,6 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
-using System;
 using YMM4Browser.View;
 
 namespace YMM4Browser.ViewModel
@@ -97,6 +97,8 @@ namespace YMM4Browser.ViewModel
         public ICommand ViewSourceCommand { get; }
         public ICommand AddBookmarkGroupCommand { get; }
         public ICommand RemoveBookmarkGroupCommand { get; }
+        public ICommand OpenDownloaderWindowCommand { get; }
+
 
         public BrowserViewModel()
         {
@@ -116,6 +118,8 @@ namespace YMM4Browser.ViewModel
             ViewSourceCommand = new RelayCommand(_ => ViewSource());
             AddBookmarkGroupCommand = new RelayCommand(_ => AddBookmarkGroup());
             RemoveBookmarkGroupCommand = new RelayCommand(group => RemoveBookmarkGroup(group as BookmarkGroup));
+            OpenDownloaderWindowCommand = new RelayCommand(_ => OpenDownloaderWindow());
+
 
             Bookmarks = new ObservableCollection<BookmarkItem>();
             BookmarkGroups = new ObservableCollection<BookmarkGroup>();
@@ -139,11 +143,11 @@ namespace YMM4Browser.ViewModel
             catch (Exception ex)
             {
                 StatusText = "ViewModelの初期化に失敗しました。";
-                MessageBox.Show(
-                    $"YMM4BrowserのViewModel初期化中にエラーが発生しました。\n\nエラー: {ex.Message}",
+                var dialogVM = new GenericDialogViewModel(
                     "YMM4Browser 内部エラー",
-                    MessageBoxButton.OK,
-                    MessageBoxImage.Error);
+                    $"YMM4BrowserのViewModel初期化中にエラーが発生しました。\n\nエラー: {ex.Message}");
+                var dialog = new GenericDialog { DataContext = dialogVM };
+                dialog.ShowDialog();
             }
         }
 
@@ -164,6 +168,44 @@ namespace YMM4Browser.ViewModel
                 UpdateNavigationButtons();
                 UpdatePageTitle();
             };
+        }
+
+        private void OpenDownloaderWindow()
+        {
+            if (!DownloaderSettings.Default.AgreementAcknowledged)
+            {
+                var dialogVM = new GenericDialogViewModel(
+                    "利用前の確認",
+                    "画像・動画のダウンロード機能を利用する前に、対象ウェブサイトの利用規約を必ず確認してください。\n\n著作権で保護されたコンテンツの無断ダウンロードや再配布は、法律で禁止されています。本機能は、個人の責任において、法律と利用規約を遵守する範囲で利用するものとします。\n\nこの内容に同意しますか？",
+                    GenericDialogViewModel.ButtonSet.YesNo);
+
+                var dialog = new GenericDialog { DataContext = dialogVM };
+                var result = dialog.ShowDialog();
+
+                if (result == true)
+                {
+                    DownloaderSettings.Default.AgreementAcknowledged = true;
+                    DownloaderSettings.Default.Save();
+                }
+                else
+                {
+                    return;
+                }
+            }
+
+            if (_webView == null)
+            {
+                var errorVM = new GenericDialogViewModel("エラー", "ブラウザが初期化されていません。");
+                var errorDialog = new GenericDialog { DataContext = errorVM };
+                errorDialog.ShowDialog();
+                return;
+            }
+
+            var downloaderWindow = new DownloaderWindow
+            {
+                DataContext = new DownloaderViewModel(_webView, CurrentUrl)
+            };
+            downloaderWindow.Show();
         }
 
         private void UpdateBookmarkBarView()
@@ -504,7 +546,9 @@ namespace YMM4Browser.ViewModel
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"スクリーンショットの保存に失敗しました: {ex.Message}");
+                var errorVM = new GenericDialogViewModel("エラー", $"スクリーンショットの保存に失敗しました: {ex.Message}");
+                var errorDialog = new GenericDialog { DataContext = errorVM };
+                errorDialog.ShowDialog();
                 StatusText = "スクリーンショットの保存に失敗";
             }
         }
@@ -541,8 +585,9 @@ namespace YMM4Browser.ViewModel
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"ソース表示エラー: {ex.Message}", "エラー",
-                    MessageBoxButton.OK, MessageBoxImage.Error);
+                var errorVM = new GenericDialogViewModel("エラー", $"ソース表示エラー: {ex.Message}");
+                var errorDialog = new GenericDialog { DataContext = errorVM };
+                errorDialog.ShowDialog();
             }
         }
 
@@ -623,7 +668,11 @@ namespace YMM4Browser.ViewModel
             _canExecute = canExecute;
         }
 
-        public bool CanExecute(object? parameter) => _canExecute?.Invoke(parameter) ?? true;
+        public bool CanExecute(object? parameter)
+        {
+            var result = _canExecute?.Invoke(parameter) ?? true;
+            return result;
+        }
 
         public void Execute(object? parameter) => _execute(parameter);
 
