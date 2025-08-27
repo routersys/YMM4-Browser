@@ -50,6 +50,12 @@ namespace YMM4Browser.View
                     webView.CoreWebView2.Settings.IsWebMessageEnabled = false;
                     webView.CoreWebView2.Settings.IsScriptEnabled = BrowserSettings.Default.EnableJavaScript;
 
+                    if (BrowserSettings.Default.CompactMode)
+                    {
+                        string androidUserAgent = "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Mobile Safari/537.36";
+                        webView.CoreWebView2.Settings.UserAgent = androidUserAgent;
+                    }
+
                     webView.CoreWebView2.DocumentTitleChanged += OnDocumentTitleChanged;
 
                     if (BrowserSettings.Default.EnablePopupBlock)
