@@ -3,10 +3,12 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:wv2="clr-namespace:Microsoft.Web.WebView2.Wpf;assembly=Microsoft.Web.WebView2.Wpf"
              xmlns:vm="clr-namespace:YMM4Browser.ViewModel"
+             xmlns:local="clr-namespace:YMM4Browser"
              x:Name="root">
 
     <UserControl.Resources>
         <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter"/>
+        <local:CountToVisibilityConverter x:Key="CountToVisibilityConverter"/>
 
         <Style x:Key="IconPathStyle" TargetType="Path">
             <Setter Property="Fill" Value="{DynamicResource {x:Static SystemColors.MenuTextBrushKey}}"/>
@@ -26,6 +28,19 @@
             <Setter Property="Background" Value="Transparent"/>
             <Setter Property="BorderBrush" Value="Transparent"/>
             <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="3">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
             <Style.Triggers>
                 <Trigger Property="IsMouseOver" Value="True">
                     <Setter Property="Background" Value="{DynamicResource {x:Static SystemColors.ControlLightBrushKey}}"/>
@@ -48,6 +63,19 @@
             <Setter Property="Background" Value="Transparent"/>
             <Setter Property="BorderBrush" Value="Transparent"/>
             <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ToggleButton">
+                        <Border Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="3">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
             <Style.Triggers>
                 <Trigger Property="IsMouseOver" Value="True">
                     <Setter Property="Background" Value="{DynamicResource {x:Static SystemColors.ControlLightBrushKey}}"/>
@@ -60,6 +88,59 @@
                 </Trigger>
             </Style.Triggers>
         </Style>
+
+        <Style x:Key="BookmarkBarButtonStyle" TargetType="Button">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderBrush" Value="Transparent"/>
+            <Setter Property="Foreground" Value="{DynamicResource {x:Static SystemColors.MenuTextBrushKey}}"/>
+            <Setter Property="Padding" Value="6,4"/>
+            <Setter Property="Margin" Value="2,0"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="1"
+                                CornerRadius="3">
+                            <ContentPresenter HorizontalAlignment="Left" VerticalAlignment="Center" Margin="{TemplateBinding Padding}"/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="{DynamicResource {x:Static SystemColors.ControlLightBrushKey}}"/>
+                </Trigger>
+                <Trigger Property="IsPressed" Value="True">
+                    <Setter Property="Background" Value="{DynamicResource {x:Static SystemColors.ControlDarkBrushKey}}"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <HierarchicalDataTemplate DataType="{x:Type local:BookmarkGroup}">
+            <StackPanel Orientation="Horizontal">
+                <TextBlock Text="{Binding Name}" />
+            </StackPanel>
+            <HierarchicalDataTemplate.ItemsSource>
+                <Binding Path="Bookmarks" />
+            </HierarchicalDataTemplate.ItemsSource>
+            <HierarchicalDataTemplate.ItemContainerStyle>
+                <Style TargetType="MenuItem">
+                    <Setter Property="Header" Value="{Binding Name}" />
+                    <Setter Property="Command" Value="{Binding DataContext.NavigateToBookmarkCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" />
+                    <Setter Property="CommandParameter" Value="{Binding}" />
+                    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                </Style>
+            </HierarchicalDataTemplate.ItemContainerStyle>
+        </HierarchicalDataTemplate>
+
+        <DataTemplate DataType="{x:Type local:BookmarkItem}">
+            <MenuItem Header="{Binding Name}"
+                      Command="{Binding DataContext.NavigateToBookmarkCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                      CommandParameter="{Binding}"/>
+        </DataTemplate>
     </UserControl.Resources>
 
     <Grid>
@@ -67,6 +148,7 @@
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
         <Border Grid.Row="0"
@@ -105,9 +187,24 @@
                         <Path Style="{StaticResource IconPathStyle}"
                               Data="M10,20V14H14V20H19V12H22L12,3L2,12H5V20H10Z"/>
                     </Button>
+
+                    <Button Style="{StaticResource NavButtonStyle}"
+                            Command="{Binding StopCommand}"
+                            ToolTip="停止"
+                            IsEnabled="{Binding IsNavigating}">
+                        <Path Style="{StaticResource IconPathStyle}"
+                              Data="M18,18H6V6H18V18Z"/>
+                    </Button>
                 </StackPanel>
 
                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                    <Button Style="{StaticResource NavButtonStyle}"
+                            Command="{Binding ViewSourceCommand}"
+                            ToolTip="ソース表示">
+                        <Path Style="{StaticResource IconPathStyle}"
+                              Data="M14.6,16.6L19.2,12L14.6,7.4L16,6L22,12L16,18L14.6,16.6M9.4,16.6L8,18L2,12L8,6L9.4,7.4L4.8,12L9.4,16.6Z"/>
+                    </Button>
+
                     <Button Style="{StaticResource NavButtonStyle}"
                             Command="{Binding TakeScreenshotCommand}"
                             ToolTip="スクリーンショット">
@@ -128,6 +225,13 @@
                         <Path Style="{StaticResource IconPathStyle}"
                               Data="M16,4V16L12,14L8,16V4H16M16,2H8A2,2 0 0,0 6,4V20L12,17L18,20V4A2,2 0 0,0 16,2Z"/>
                     </ToggleButton>
+
+                    <ToggleButton x:Name="HistoryToggle"
+                                  Style="{StaticResource IconToggleButtonStyle}"
+                                  ToolTip="履歴">
+                        <Path Style="{StaticResource IconPathStyle}"
+                              Data="M13.5,8H12V13L16.28,15.54L17,14.33L13.5,12.25V8M13,3A9,9 0 0,0 4,12H1L4.96,16.03L9,12H6A7,7 0 0,1 13,5A7,7 0 0,1 20,12A7,7 0 0,1 13,19C11.07,19 9.32,18.21 8.06,16.94L6.64,18.36C8.27,20 10.5,21 13,21A9,9 0 0,0 22,12A9,9 0 0,0 13,3"/>
+                    </ToggleButton>
                 </StackPanel>
 
                 <Border DockPanel.Dock="Top"
@@ -136,7 +240,8 @@
                         BorderThickness="1"
                         CornerRadius="2"
                         Margin="4,0">
-                    <TextBox Text="{Binding AddressBarUrl, UpdateSourceTrigger=PropertyChanged}"
+                    <TextBox x:Name="AddressBarTextBox"
+                             Text="{Binding AddressBarUrl, UpdateSourceTrigger=PropertyChanged}"
                              BorderThickness="0"
                              Background="Transparent"
                              VerticalAlignment="Center"
@@ -147,7 +252,6 @@
                         </TextBox.InputBindings>
                     </TextBox>
                 </Border>
-
             </DockPanel>
         </Border>
 
@@ -155,30 +259,84 @@
                 Background="{DynamicResource {x:Static SystemColors.ControlBrushKey}}"
                 BorderBrush="{DynamicResource {x:Static SystemColors.ActiveBorderBrushKey}}"
                 BorderThickness="0,0,0,1"
+                Padding="2"
                 Visibility="{Binding IsChecked, ElementName=BookmarkToggle, Converter={StaticResource BooleanToVisibilityConverter}}">
+            <DockPanel LastChildFill="True">
+                <Menu DockPanel.Dock="Right" VerticalAlignment="Center" Background="Transparent"
+                      Visibility="{Binding OtherBookmarkGroups.Count, Converter={StaticResource CountToVisibilityConverter}}">
+                    <MenuItem ItemsSource="{Binding OtherBookmarkGroups}" Padding="6,4">
+                        <MenuItem.Header>
+                            <StackPanel Orientation="Horizontal">
+                                <Path Data="M10,4H4C2.89,4 2,4.89 2,6V18A2,2 0 0,0 4,20H20A2,2 0 0,0 22,18V8C22,6.89 21.1,6 20,6H12L10,4Z"
+                                      Fill="{DynamicResource {x:Static SystemColors.MenuTextBrushKey}}" Width="16" Height="16" Stretch="Uniform"
+                                      VerticalAlignment="Center"/>
+                                <TextBlock Text="その他のブックマーク" Margin="5,0,5,0" VerticalAlignment="Center"/>
+                                <Path Data="M0,0 L3,3 L0,6 Z" Fill="{DynamicResource {x:Static SystemColors.MenuTextBrushKey}}"
+                                      VerticalAlignment="Center" HorizontalAlignment="Right"/>
+                            </StackPanel>
+                        </MenuItem.Header>
+                    </MenuItem>
+                </Menu>
+
+                <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
+                    <ItemsControl ItemsSource="{Binding TopLevelBookmarks}">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <StackPanel Orientation="Horizontal"/>
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Button Content="{Binding Name}"
+                                        ToolTip="{Binding Url}"
+                                        Style="{StaticResource BookmarkBarButtonStyle}"
+                                        Command="{Binding DataContext.NavigateToBookmarkCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                        CommandParameter="{Binding}"
+                                        MouseRightButtonUp="BookmarkButton_MouseRightButtonUp">
+                                </Button>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </ScrollViewer>
+            </DockPanel>
+        </Border>
+
+        <Border Grid.Row="1"
+                Background="{DynamicResource {x:Static SystemColors.ControlBrushKey}}"
+                BorderBrush="{DynamicResource {x:Static SystemColors.ActiveBorderBrushKey}}"
+                BorderThickness="0,0,0,1"
+                Visibility="{Binding IsChecked, ElementName=HistoryToggle, Converter={StaticResource BooleanToVisibilityConverter}}">
             <ScrollViewer HorizontalScrollBarVisibility="Auto"
-                          VerticalScrollBarVisibility="Disabled"
-                          Height="28"
-                          Background="Transparent">
-                <ItemsControl ItemsSource="{Binding Bookmarks}">
+                          VerticalScrollBarVisibility="Auto"
+                          MaxHeight="200">
+                <ItemsControl ItemsSource="{Binding History}">
                     <ItemsControl.ItemsPanel>
                         <ItemsPanelTemplate>
-                            <StackPanel Orientation="Horizontal"/>
+                            <VirtualizingStackPanel/>
                         </ItemsPanelTemplate>
                     </ItemsControl.ItemsPanel>
                     <ItemsControl.ItemTemplate>
                         <DataTemplate>
                             <Border Margin="1" Background="Transparent">
-                                <Button Content="{Binding Name}"
-                                        Command="{Binding DataContext.NavigateToBookmarkCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                <Button Command="{Binding DataContext.NavigateToHistoryCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                         CommandParameter="{Binding}"
-                                        MaxWidth="120"
-                                        Height="26"
+                                        Height="24"
                                         Padding="6,2"
                                         ToolTip="{Binding Url}"
                                         Background="Transparent"
                                         BorderBrush="Transparent"
-                                        Foreground="{DynamicResource {x:Static SystemColors.MenuTextBrushKey}}">
+                                        Foreground="{DynamicResource {x:Static SystemColors.MenuTextBrushKey}}"
+                                        HorizontalAlignment="Stretch"
+                                        HorizontalContentAlignment="Left">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="{Binding Title}"
+                                                   TextTrimming="CharacterEllipsis"
+                                                   MaxWidth="200"
+                                                   Margin="0,0,10,0"/>
+                                        <TextBlock Text="{Binding VisitTime, StringFormat='{}{0:MM/dd HH:mm}'}"
+                                                   FontSize="10"
+                                                   Foreground="{DynamicResource {x:Static SystemColors.GrayTextBrushKey}}"/>
+                                    </StackPanel>
                                     <Button.Style>
                                         <Style TargetType="Button">
                                             <Style.Triggers>
@@ -188,13 +346,6 @@
                                             </Style.Triggers>
                                         </Style>
                                     </Button.Style>
-                                    <Button.ContextMenu>
-                                        <ContextMenu>
-                                            <MenuItem Header="削除"
-                                                      Command="{Binding Path=DataContext.RemoveBookmarkCommand, ElementName=root}"
-                                                      CommandParameter="{Binding}"/>
-                                        </ContextMenu>
-                                    </Button.ContextMenu>
                                 </Button>
                             </Border>
                         </DataTemplate>
@@ -211,6 +362,24 @@
 
             <wv2:WebView2 x:Name="webView"/>
         </Grid>
+
+        <Border Grid.Row="3"
+                Background="{DynamicResource {x:Static SystemColors.ControlBrushKey}}"
+                BorderBrush="{DynamicResource {x:Static SystemColors.ActiveBorderBrushKey}}"
+                BorderThickness="0,1,0,0"
+                Height="20">
+            <DockPanel Margin="4,2">
+                <TextBlock DockPanel.Dock="Left"
+                           Text="{Binding StatusText}"
+                           VerticalAlignment="Center"
+                           Foreground="{DynamicResource {x:Static SystemColors.MenuTextBrushKey}}"/>
+                <TextBlock DockPanel.Dock="Right"
+                           Text="{Binding SecurityStatus}"
+                           VerticalAlignment="Center"
+                           HorizontalAlignment="Right"
+                           Foreground="{DynamicResource {x:Static SystemColors.MenuTextBrushKey}}"/>
+            </DockPanel>
+        </Border>
 
     </Grid>
 </UserControl>

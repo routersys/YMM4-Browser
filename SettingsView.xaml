@@ -35,6 +35,25 @@
         <Style TargetType="TextBlock">
             <Setter Property="Foreground" Value="{DynamicResource {x:Static SystemColors.MenuTextBrushKey}}"/>
         </Style>
+
+        <Style x:Key="DraggableListViewItem" TargetType="ListViewItem">
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="AllowDrop" Value="True" />
+            <EventSetter Event="PreviewMouseLeftButtonDown" Handler="ListViewItem_PreviewMouseLeftButtonDown"/>
+            <EventSetter Event="PreviewMouseMove" Handler="ListViewItem_PreviewMouseMove"/>
+            <EventSetter Event="Drop" Handler="ListViewItem_Drop"/>
+            <EventSetter Event="DragEnter" Handler="ListViewItem_DragEnter"/>
+            <EventSetter Event="DragLeave" Handler="ListViewItem_DragLeave"/>
+            <EventSetter Event="MouseRightButtonUp" Handler="BookmarkListViewItem_MouseRightButtonUp"/>
+            <Style.Triggers>
+                <Trigger Property="IsSelected" Value="True">
+                    <Setter Property="Background" Value="{DynamicResource {x:Static SystemColors.HighlightBrushKey}}"/>
+                </Trigger>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="{DynamicResource {x:Static SystemColors.ControlLightBrushKey}}"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
     </UserControl.Resources>
 
     <ScrollViewer VerticalScrollBarVisibility="Auto"
@@ -76,10 +95,19 @@
                               IsChecked="{Binding CompactMode, Mode=TwoWay}"
                               Content="コンパクトモード"
                               Margin="0,0,0,5"/>
+
+                    <Label Content="履歴保存件数"/>
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
+                        <TextBox Text="{Binding MaxHistoryItems, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                 Width="100"
+                                 Height="24"
+                                 VerticalContentAlignment="Center"/>
+                        <Label Content="件" Margin="5,0,0,0"/>
+                    </StackPanel>
                 </StackPanel>
             </GroupBox>
 
-            <GroupBox Header="セキュリティ設定" Margin="0,0,0,10">
+            <GroupBox Header="セキュリティ・機能設定" Margin="0,0,0,10">
                 <StackPanel Margin="5">
                     <CheckBox x:Name="AdBlockCheckBox"
                               IsChecked="{Binding EnableAdBlock, Mode=TwoWay}"
@@ -89,42 +117,128 @@
                               IsChecked="{Binding EnablePopupBlock, Mode=TwoWay}"
                               Content="ポップアップブロックを有効にする"
                               Margin="0,0,0,5"/>
+                    <CheckBox x:Name="JavaScriptCheckBox"
+                              IsChecked="{Binding EnableJavaScript, Mode=TwoWay}"
+                              Content="JavaScriptを有効にする"
+                              Margin="0,0,0,5"/>
+                    <CheckBox x:Name="CookiesCheckBox"
+                              IsChecked="{Binding EnableCookies, Mode=TwoWay}"
+                              Content="Cookieを有効にする"
+                              Margin="0,0,0,5"/>
+                    <CheckBox x:Name="ExtensionsCheckBox"
+                              IsChecked="{Binding EnableExtensions, Mode=TwoWay}"
+                              Content="拡張機能サポートを有効にする（実験的機能）"
+                              Margin="0,0,0,5"/>
                 </StackPanel>
             </GroupBox>
 
-            <GroupBox Header="ブックマーク管理">
+            <GroupBox Header="ブックマークグループ管理" Margin="0,0,0,10">
                 <StackPanel Margin="5">
-                    <Label Content="登録済みブックマーク"/>
+                    <Label Content="ブックマークグループ"/>
                     <Border Background="{DynamicResource {x:Static SystemColors.WindowBrushKey}}"
                             BorderBrush="{DynamicResource {x:Static SystemColors.ActiveBorderBrushKey}}"
                             BorderThickness="1"
                             Margin="0,0,0,10">
-                        <ListView x:Name="BookmarkListView"
-                                  ItemsSource="{Binding Bookmarks}"
-                                  Height="200"
-                                  SelectionMode="Extended"
+                        <ListView x:Name="BookmarkGroupListView"
+                                  ItemsSource="{Binding BookmarkGroups}"
+                                  Height="120"
+                                  SelectionMode="Single"
                                   Background="Transparent"
                                   BorderThickness="0">
                             <ListView.ItemContainerStyle>
                                 <Style TargetType="ListViewItem">
                                     <Setter Property="HorizontalContentAlignment" Value="Stretch" />
-                                    <Setter Property="ContextMenu">
-                                        <Setter.Value>
-                                            <ContextMenu>
-                                                <MenuItem Header="編集"
-                                                          Command="{Binding Path=EditBookmarkCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                                          CommandParameter="{Binding}"/>
-                                                <MenuItem Header="削除"
-                                                          Command="{Binding Path=RemoveBookmarkFromMenuCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                                          CommandParameter="{Binding}"/>
-                                            </ContextMenu>
-                                        </Setter.Value>
-                                    </Setter>
+                                    <EventSetter Event="MouseRightButtonUp" Handler="BookmarkGroupListViewItem_MouseRightButtonUp"/>
                                 </Style>
                             </ListView.ItemContainerStyle>
                             <ListView.View>
                                 <GridView>
-                                    <GridViewColumn Header="名前" Width="150">
+                                    <GridViewColumn Header="グループ名" Width="200">
+                                        <GridViewColumn.HeaderContainerStyle>
+                                            <Style TargetType="GridViewColumnHeader">
+                                                <Setter Property="Foreground" Value="{DynamicResource {x:Static SystemColors.MenuTextBrushKey}}"/>
+                                                <Setter Property="Background" Value="{DynamicResource {x:Static SystemColors.ControlBrushKey}}"/>
+                                            </Style>
+                                        </GridViewColumn.HeaderContainerStyle>
+                                        <GridViewColumn.CellTemplate>
+                                            <DataTemplate>
+                                                <TextBlock Text="{Binding Name}"
+                                                           VerticalAlignment="Center"
+                                                           Margin="4,0"
+                                                           Foreground="{DynamicResource {x:Static SystemColors.WindowTextBrushKey}}"/>
+                                            </DataTemplate>
+                                        </GridViewColumn.CellTemplate>
+                                    </GridViewColumn>
+                                    <GridViewColumn Header="ブックマーク数" Width="120">
+                                        <GridViewColumn.HeaderContainerStyle>
+                                            <Style TargetType="GridViewColumnHeader">
+                                                <Setter Property="Foreground" Value="{DynamicResource {x:Static SystemColors.MenuTextBrushKey}}"/>
+                                                <Setter Property="Background" Value="{DynamicResource {x:Static SystemColors.ControlBrushKey}}"/>
+                                            </Style>
+                                        </GridViewColumn.HeaderContainerStyle>
+                                        <GridViewColumn.CellTemplate>
+                                            <DataTemplate>
+                                                <TextBlock Text="{Binding BookmarkCount}"
+                                                           VerticalAlignment="Center"
+                                                           Margin="4,0"
+                                                           HorizontalAlignment="Center"
+                                                           Foreground="{DynamicResource {x:Static SystemColors.WindowTextBrushKey}}"/>
+                                            </DataTemplate>
+                                        </GridViewColumn.CellTemplate>
+                                    </GridViewColumn>
+                                </GridView>
+                            </ListView.View>
+                        </ListView>
+                    </Border>
+
+                    <StackPanel Orientation="Horizontal">
+                        <Button Content="グループ追加"
+                                Width="100"
+                                Height="28"
+                                Margin="0,0,10,0"
+                                Click="AddBookmarkGroupButton_Click"/>
+                        <Button Content="グループ削除"
+                                Width="100"
+                                Height="28"
+                                Click="RemoveBookmarkGroupButton_Click"/>
+                    </StackPanel>
+                </StackPanel>
+            </GroupBox>
+
+            <GroupBox Header="ブックマーク管理">
+                <StackPanel Margin="5">
+                    <DockPanel Margin="0,0,0,10">
+                        <Label DockPanel.Dock="Left" Content="登録済みブックマーク"/>
+                        <ComboBox x:Name="GroupFilterComboBox"
+                                  DockPanel.Dock="Right"
+                                  Width="150"
+                                  Height="24"
+                                  VerticalContentAlignment="Center"
+                                  DisplayMemberPath="Name"
+                                  SelectionChanged="GroupFilterComboBox_SelectionChanged">
+                        </ComboBox>
+                        <Label DockPanel.Dock="Right" Content="グループフィルタ:" Margin="10,0,5,0"/>
+                    </DockPanel>
+
+                    <Border Background="{DynamicResource {x:Static SystemColors.WindowBrushKey}}"
+                            BorderBrush="{DynamicResource {x:Static SystemColors.ActiveBorderBrushKey}}"
+                            BorderThickness="1"
+                            Margin="0,0,0,10">
+                        <ListView x:Name="BookmarkListView"
+                                  ItemsSource="{Binding FilteredBookmarks}"
+                                  Height="250"
+                                  SelectionMode="Extended"
+                                  Background="Transparent"
+                                  BorderThickness="0"
+                                  AllowDrop="True"
+                                  Drop="BookmarkListView_Drop"
+                                  DragEnter="BookmarkListView_DragEnter">
+                            <ListView.ItemContainerStyle>
+                                <StaticResource ResourceKey="DraggableListViewItem"/>
+                            </ListView.ItemContainerStyle>
+                            <ListView.View>
+                                <GridView>
+                                    <GridViewColumn Header="名前" Width="180">
                                         <GridViewColumn.HeaderContainerStyle>
                                             <Style TargetType="GridViewColumnHeader">
                                                 <Setter Property="Foreground" Value="{DynamicResource {x:Static SystemColors.MenuTextBrushKey}}"/>
@@ -141,7 +255,7 @@
                                             </DataTemplate>
                                         </GridViewColumn.CellTemplate>
                                     </GridViewColumn>
-                                    <GridViewColumn Header="URL">
+                                    <GridViewColumn Header="URL" Width="280">
                                         <GridViewColumn.HeaderContainerStyle>
                                             <Style TargetType="GridViewColumnHeader">
                                                 <Setter Property="Foreground" Value="{DynamicResource {x:Static SystemColors.MenuTextBrushKey}}"/>
@@ -151,6 +265,23 @@
                                         <GridViewColumn.CellTemplate>
                                             <DataTemplate>
                                                 <TextBlock Text="{Binding Url}"
+                                                           VerticalAlignment="Center"
+                                                           Margin="4,0"
+                                                           TextTrimming="CharacterEllipsis"
+                                                           Foreground="{DynamicResource {x:Static SystemColors.WindowTextBrushKey}}"/>
+                                            </DataTemplate>
+                                        </GridViewColumn.CellTemplate>
+                                    </GridViewColumn>
+                                    <GridViewColumn Header="グループ" Width="120">
+                                        <GridViewColumn.HeaderContainerStyle>
+                                            <Style TargetType="GridViewColumnHeader">
+                                                <Setter Property="Foreground" Value="{DynamicResource {x:Static SystemColors.MenuTextBrushKey}}"/>
+                                                <Setter Property="Background" Value="{DynamicResource {x:Static SystemColors.ControlBrushKey}}"/>
+                                            </Style>
+                                        </GridViewColumn.HeaderContainerStyle>
+                                        <GridViewColumn.CellTemplate>
+                                            <DataTemplate>
+                                                <TextBlock Text="{Binding GroupName}"
                                                            VerticalAlignment="Center"
                                                            Margin="4,0"
                                                            TextTrimming="CharacterEllipsis"
@@ -172,13 +303,106 @@
                         <Button Content="削除"
                                 Width="70"
                                 Height="28"
+                                Margin="0,0,10,0"
                                 Click="RemoveBookmarkButton_Click"/>
-                        <TextBlock Text="※複数選択可能 (Ctrl/Shiftキー)"
+                        <Button Content="上に移動"
+                                Width="80"
+                                Height="28"
+                                Margin="0,0,10,0"
+                                Click="MoveBookmarkUpButton_Click"/>
+                        <Button Content="下に移動"
+                                Width="80"
+                                Height="28"
+                                Margin="0,0,10,0"
+                                Click="MoveBookmarkDownButton_Click"/>
+                        <TextBlock Text="※ドラッグアンドドロップで並び替え可能"
                                    VerticalAlignment="Center"
                                    Margin="15,0,0,0"
                                    FontSize="11"
                                    Foreground="{DynamicResource {x:Static SystemColors.GrayTextBrushKey}}"/>
                     </StackPanel>
+                </StackPanel>
+            </GroupBox>
+
+            <GroupBox Header="履歴管理" Margin="0,10,0,0">
+                <StackPanel Margin="5">
+                    <DockPanel Margin="0,0,0,10">
+                        <Label DockPanel.Dock="Left" Content="閲覧履歴"/>
+                        <Button DockPanel.Dock="Right"
+                                Content="履歴をクリア"
+                                Width="100"
+                                Height="24"
+                                Click="ClearHistoryButton_Click"/>
+                        <TextBlock DockPanel.Dock="Right"
+                                   Text="{Binding History.Count, StringFormat='{}件数: {0}'}"
+                                   VerticalAlignment="Center"
+                                   Margin="0,0,10,0"/>
+                    </DockPanel>
+
+                    <Border Background="{DynamicResource {x:Static SystemColors.WindowBrushKey}}"
+                            BorderBrush="{DynamicResource {x:Static SystemColors.ActiveBorderBrushKey}}"
+                            BorderThickness="1"
+                            Margin="0,0,0,10">
+                        <ListView ItemsSource="{Binding History}"
+                                  Height="150"
+                                  Background="Transparent"
+                                  BorderThickness="0">
+                            <ListView.View>
+                                <GridView>
+                                    <GridViewColumn Header="タイトル" Width="200">
+                                        <GridViewColumn.HeaderContainerStyle>
+                                            <Style TargetType="GridViewColumnHeader">
+                                                <Setter Property="Foreground" Value="{DynamicResource {x:Static SystemColors.MenuTextBrushKey}}"/>
+                                                <Setter Property="Background" Value="{DynamicResource {x:Static SystemColors.ControlBrushKey}}"/>
+                                            </Style>
+                                        </GridViewColumn.HeaderContainerStyle>
+                                        <GridViewColumn.CellTemplate>
+                                            <DataTemplate>
+                                                <TextBlock Text="{Binding Title}"
+                                                           VerticalAlignment="Center"
+                                                           Margin="4,0"
+                                                           TextTrimming="CharacterEllipsis"
+                                                           Foreground="{DynamicResource {x:Static SystemColors.WindowTextBrushKey}}"/>
+                                            </DataTemplate>
+                                        </GridViewColumn.CellTemplate>
+                                    </GridViewColumn>
+                                    <GridViewColumn Header="URL" Width="250">
+                                        <GridViewColumn.HeaderContainerStyle>
+                                            <Style TargetType="GridViewColumnHeader">
+                                                <Setter Property="Foreground" Value="{DynamicResource {x:Static SystemColors.MenuTextBrushKey}}"/>
+                                                <Setter Property="Background" Value="{DynamicResource {x:Static SystemColors.ControlBrushKey}}"/>
+                                            </Style>
+                                        </GridViewColumn.HeaderContainerStyle>
+                                        <GridViewColumn.CellTemplate>
+                                            <DataTemplate>
+                                                <TextBlock Text="{Binding Url}"
+                                                           VerticalAlignment="Center"
+                                                           Margin="4,0"
+                                                           TextTrimming="CharacterEllipsis"
+                                                           Foreground="{DynamicResource {x:Static SystemColors.WindowTextBrushKey}}"/>
+                                            </DataTemplate>
+                                        </GridViewColumn.CellTemplate>
+                                    </GridViewColumn>
+                                    <GridViewColumn Header="訪問日時" Width="130">
+                                        <GridViewColumn.HeaderContainerStyle>
+                                            <Style TargetType="GridViewColumnHeader">
+                                                <Setter Property="Foreground" Value="{DynamicResource {x:Static SystemColors.MenuTextBrushKey}}"/>
+                                                <Setter Property="Background" Value="{DynamicResource {x:Static SystemColors.ControlBrushKey}}"/>
+                                            </Style>
+                                        </GridViewColumn.HeaderContainerStyle>
+                                        <GridViewColumn.CellTemplate>
+                                            <DataTemplate>
+                                                <TextBlock Text="{Binding VisitTime, StringFormat='{}{0:yyyy/MM/dd HH:mm}'}"
+                                                           VerticalAlignment="Center"
+                                                           Margin="4,0"
+                                                           Foreground="{DynamicResource {x:Static SystemColors.WindowTextBrushKey}}"/>
+                                            </DataTemplate>
+                                        </GridViewColumn.CellTemplate>
+                                    </GridViewColumn>
+                                </GridView>
+                            </ListView.View>
+                        </ListView>
+                    </Border>
                 </StackPanel>
             </GroupBox>
         </StackPanel>

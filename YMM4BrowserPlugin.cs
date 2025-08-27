@@ -21,6 +21,17 @@ public class YMM4BrowserPlugin : IToolPlugin
 
     public YMM4BrowserPlugin()
     {
-        BrowserSettings.InitializeSettings();
+        try
+        {
+            BrowserSettings.InitializeSettings();
+        }
+        catch (Exception ex)
+        {
+            System.Windows.MessageBox.Show(
+                $"YMM4Browser プラグインの初期化中にエラーが発生しました。\n\nエラー: {ex.Message}\n\n設定ファイルが破損している可能性があります。",
+                "YMM4Browser 初期化エラー",
+                System.Windows.MessageBoxButton.OK,
+                System.Windows.MessageBoxImage.Error);
+        }
     }
 }

@@ -6,6 +6,11 @@ using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Windows.Input;
 using YMM4Browser.View;
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Media;
+using System.Linq;
+using System;
 
 namespace YMM4Browser.ViewModel;
 
@@ -17,6 +22,8 @@ public class BrowserViewModel : INotifyPropertyChanged
     private bool _canGoBack = false;
     private bool _canGoForward = false;
     private string _pageTitle = "";
+    private string _statusText = "準備完了";
+    private string _securityStatus = "";
     private WebView2? _webView;
 
     public string CurrentUrl
@@ -79,46 +86,161 @@ public class BrowserViewModel : INotifyPropertyChanged
         }
     }
 
-    public ObservableCollection<BookmarkItem> Bookmarks => BrowserSettings.Default.Bookmarks;
+    public string StatusText
+    {
+        get => _statusText;
+        set
+        {
+            _statusText = value;
+            OnPropertyChanged();
+        }
+    }
+
+    public string SecurityStatus
+    {
+        get => _securityStatus;
+        set
+        {
+            _securityStatus = value;
+            OnPropertyChanged();
+        }
+    }
+
+    public ObservableCollection<BookmarkItem> Bookmarks { get; private set; }
+    public ObservableCollection<BookmarkGroup> BookmarkGroups { get; private set; }
+    public ObservableCollection<HistoryItem> History { get; private set; }
+
+    public ObservableCollection<BookmarkItem> TopLevelBookmarks { get; } = new();
+    public ObservableCollection<BookmarkGroup> OtherBookmarkGroups { get; } = new();
 
     public ICommand GoBackCommand { get; }
     public ICommand GoForwardCommand { get; }
     public ICommand RefreshCommand { get; }
+    public ICommand StopCommand { get; }
     public ICommand NavigateCommand { get; }
     public ICommand HomeCommand { get; }
     public ICommand AddBookmarkCommand { get; }
+    public ICommand EditBookmarkCommand { get; }
     public ICommand NavigateToBookmarkCommand { get; }
     public ICommand RemoveBookmarkCommand { get; }
     public ICommand TakeScreenshotCommand { get; }
+    public ICommand NavigateToHistoryCommand { get; }
+    public ICommand ClearHistoryCommand { get; }
+    public ICommand ViewSourceCommand { get; }
+    public ICommand AddBookmarkGroupCommand { get; }
+    public ICommand RemoveBookmarkGroupCommand { get; }
 
     public BrowserViewModel()
     {
         GoBackCommand = new RelayCommand(_ => GoBack(), _ => CanGoBack);
         GoForwardCommand = new RelayCommand(_ => GoForward(), _ => CanGoForward);
         RefreshCommand = new RelayCommand(_ => Refresh());
+        StopCommand = new RelayCommand(_ => Stop(), _ => IsNavigating);
         NavigateCommand = new RelayCommand(url => Navigate(url?.ToString() ?? AddressBarUrl));
         HomeCommand = new RelayCommand(_ => Navigate(BrowserSettings.Default.HomeUrl));
         AddBookmarkCommand = new RelayCommand(_ => AddBookmark());
-        NavigateToBookmarkCommand = new RelayCommand(bookmark => NavigateToBookmark(bookmark as BookmarkItem));
-        RemoveBookmarkCommand = new RelayCommand(bookmark => RemoveBookmark(bookmark as BookmarkItem));
+        EditBookmarkCommand = new RelayCommand(bookmark => EditBookmark(bookmark));
+        NavigateToBookmarkCommand = new RelayCommand(bookmark => NavigateToBookmark(bookmark));
+        RemoveBookmarkCommand = new RelayCommand(bookmark => RemoveBookmark(bookmark));
         TakeScreenshotCommand = new RelayCommand(_ => TakeScreenshot());
+        NavigateToHistoryCommand = new RelayCommand(historyItem => NavigateToHistory(historyItem as HistoryItem));
+        ClearHistoryCommand = new RelayCommand(_ => ClearHistory());
+        ViewSourceCommand = new RelayCommand(_ => ViewSource());
+        AddBookmarkGroupCommand = new RelayCommand(_ => AddBookmarkGroup());
+        RemoveBookmarkGroupCommand = new RelayCommand(group => RemoveBookmarkGroup(group as BookmarkGroup));
 
-        AddressBarUrl = BrowserSettings.Default.HomeUrl;
+        Bookmarks = new ObservableCollection<BookmarkItem>();
+        BookmarkGroups = new ObservableCollection<BookmarkGroup>();
+        History = new ObservableCollection<HistoryItem>();
 
-        BrowserSettings.Default.Bookmarks.CollectionChanged += OnBookmarksCollectionChanged;
-        BrowserSettings.Default.PropertyChanged += OnSettingsPropertyChanged;
+        try
+        {
+            Bookmarks = BrowserSettings.Default.Bookmarks;
+            BookmarkGroups = BrowserSettings.Default.BookmarkGroups;
+            History = BrowserSettings.Default.History;
+
+            AddressBarUrl = BrowserSettings.Default.HomeUrl;
+
+            BrowserSettings.Default.Bookmarks.CollectionChanged += OnBookmarksCollectionChanged;
+            BrowserSettings.Default.BookmarkGroups.CollectionChanged += OnBookmarkGroupsCollectionChanged;
+            BrowserSettings.Default.History.CollectionChanged += OnHistoryCollectionChanged;
+            BrowserSettings.Default.PropertyChanged += OnSettingsPropertyChanged;
+
+            UpdateBookmarkBarView();
+        }
+        catch (Exception ex)
+        {
+            StatusText = "ViewModelの初期化に失敗しました。";
+            MessageBox.Show(
+                $"YMM4BrowserのViewModel初期化中にエラーが発生しました。\n\nエラー: {ex.Message}",
+                "YMM4Browser 内部エラー",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+        }
+    }
+
+    private void UpdateBookmarkBarView()
+    {
+        TopLevelBookmarks.Clear();
+        OtherBookmarkGroups.Clear();
+
+        var allBookmarks = Bookmarks.OrderBy(b => b.Order).ToList();
+        var allGroups = BookmarkGroups.OrderBy(g => g.Order).ToList();
+
+        var topLevelGroup = allGroups.FirstOrDefault();
+        if (topLevelGroup != null)
+        {
+            foreach (var bookmark in allBookmarks.Where(b => b.GroupId == topLevelGroup.Id))
+            {
+                TopLevelBookmarks.Add(bookmark);
+            }
+
+            foreach (var group in allGroups.Skip(1))
+            {
+                group.Bookmarks.Clear();
+                foreach (var bookmark in allBookmarks.Where(b => b.GroupId == group.Id))
+                {
+                    group.Bookmarks.Add(bookmark);
+                }
+                OtherBookmarkGroups.Add(group);
+            }
+        }
+        else
+        {
+            foreach (var bookmark in allBookmarks)
+            {
+                TopLevelBookmarks.Add(bookmark);
+            }
+        }
     }
 
     private void OnBookmarksCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
         OnPropertyChanged(nameof(Bookmarks));
+        UpdateBookmarkBarView();
+    }
+
+    private void OnBookmarkGroupsCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        OnPropertyChanged(nameof(BookmarkGroups));
+        UpdateBookmarkBarView();
+    }
+
+    private void OnHistoryCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        OnPropertyChanged(nameof(History));
     }
 
     private void OnSettingsPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName == nameof(BrowserSettings.Bookmarks))
+        if (e.PropertyName == nameof(BrowserSettings.Bookmarks) || e.PropertyName == nameof(BrowserSettings.BookmarkGroups))
         {
-            OnPropertyChanged(nameof(Bookmarks));
+            OnPropertyChanged(e.PropertyName);
+            UpdateBookmarkBarView();
+        }
+        else if (e.PropertyName == nameof(BrowserSettings.History))
+        {
+            OnPropertyChanged(nameof(History));
         }
     }
 
@@ -131,15 +253,38 @@ public class BrowserViewModel : INotifyPropertyChanged
         webView.SourceChanged += OnSourceChanged;
         webView.CoreWebView2InitializationCompleted += (_, _) =>
         {
+            if (_webView?.CoreWebView2 != null)
+            {
+                _webView.CoreWebView2.HistoryChanged += CoreWebView2_HistoryChanged;
+            }
             UpdateNavigationButtons();
             UpdatePageTitle();
         };
+    }
+
+    private void CoreWebView2_HistoryChanged(object? sender, object e)
+    {
+        Application.Current?.Dispatcher.Invoke(() =>
+        {
+            UpdateNavigationButtons();
+        });
+    }
+
+    public void SetStatusText(string text)
+    {
+        StatusText = text;
+    }
+
+    public void SetSecurityStatus(string status)
+    {
+        SecurityStatus = status;
     }
 
     private void OnNavigationStarting(object? sender, CoreWebView2NavigationStartingEventArgs e)
     {
         IsNavigating = true;
         AddressBarUrl = e.Uri;
+        StatusText = $"読み込み中: {e.Uri}";
     }
 
     private void OnNavigationCompleted(object? sender, CoreWebView2NavigationCompletedEventArgs e)
@@ -147,6 +292,15 @@ public class BrowserViewModel : INotifyPropertyChanged
         IsNavigating = false;
         UpdateNavigationButtons();
         UpdatePageTitle();
+
+        if (e.IsSuccess)
+        {
+            StatusText = "完了";
+        }
+        else
+        {
+            StatusText = $"読み込みエラー: {e.WebErrorStatus}";
+        }
     }
 
     private void OnSourceChanged(object? sender, CoreWebView2SourceChangedEventArgs e)
@@ -174,6 +328,11 @@ public class BrowserViewModel : INotifyPropertyChanged
         _webView?.CoreWebView2?.Reload();
     }
 
+    private void Stop()
+    {
+        _webView?.CoreWebView2?.Stop();
+    }
+
     private void Navigate(string url)
     {
         if (string.IsNullOrWhiteSpace(url)) return;
@@ -194,45 +353,159 @@ public class BrowserViewModel : INotifyPropertyChanged
         {
             _webView?.CoreWebView2?.Navigate(url);
         }
-        catch (Exception)
+        catch (Exception ex)
         {
+            StatusText = $"ナビゲーションエラー: {ex.Message}";
         }
     }
 
     private void AddBookmark()
     {
-        if (!string.IsNullOrEmpty(CurrentUrl) && Bookmarks.All(b => b.Url != CurrentUrl))
+        if (!string.IsNullOrEmpty(CurrentUrl))
         {
+            var existingBookmark = Bookmarks.FirstOrDefault(b => b.Url == CurrentUrl);
+            if (existingBookmark != null)
+            {
+                StatusText = "このページは既にブックマークされています";
+                return;
+            }
+
             var title = !string.IsNullOrEmpty(PageTitle) ? PageTitle : CurrentUrl;
-            var bookmark = new BookmarkItem { Name = title, Url = CurrentUrl };
+            var defaultGroup = BookmarkGroups.FirstOrDefault();
+
+            if (defaultGroup == null)
+            {
+                defaultGroup = new BookmarkGroup { Name = "デフォルト" };
+                BookmarkGroups.Add(defaultGroup);
+            }
+
+            var bookmark = new BookmarkItem
+            {
+                Name = title,
+                Url = CurrentUrl,
+                GroupId = defaultGroup.Id,
+                Order = Bookmarks.Count(b => b.GroupId == defaultGroup.Id)
+            };
+
             Bookmarks.Add(bookmark);
+            StatusText = "ブックマークに追加されました";
         }
     }
 
-    private void NavigateToBookmark(BookmarkItem? bookmark)
+    private void EditBookmark(object? bookmark)
     {
-        if (bookmark != null)
+        if (bookmark is not BookmarkItem bookmarkItem) return;
+
+        try
+        {
+            var inputDialog = new BookmarkInputDialog(bookmarkItem)
+            {
+                Owner = Application.Current.MainWindow
+            };
+
+            if (inputDialog.ShowDialog() == true &&
+                !string.IsNullOrWhiteSpace(inputDialog.BookmarkName) &&
+                !string.IsNullOrWhiteSpace(inputDialog.BookmarkUrl))
+            {
+                var url = inputDialog.BookmarkUrl;
+                if (!url.StartsWith("http://") && !url.StartsWith("https://"))
+                {
+                    url = "https://" + url;
+                }
+
+                bookmarkItem.Name = inputDialog.BookmarkName.Trim();
+                bookmarkItem.Url = url.Trim();
+
+                if (inputDialog.SelectedGroup != null && bookmarkItem.GroupId != inputDialog.SelectedGroup.Id)
+                {
+                    var oldGroupId = bookmarkItem.GroupId;
+                    var newGroupId = inputDialog.SelectedGroup.Id;
+
+                    bookmarkItem.GroupId = newGroupId;
+
+                    var oldGroupBookmarks = Bookmarks.Where(b => b.GroupId == oldGroupId).OrderBy(b => b.Order).ToList();
+                    for (int i = 0; i < oldGroupBookmarks.Count; i++)
+                    {
+                        oldGroupBookmarks[i].Order = i;
+                    }
+
+                    bookmarkItem.Order = Bookmarks.Count(b => b.GroupId == newGroupId);
+                }
+
+                StatusText = "ブックマークが更新されました";
+                UpdateBookmarkBarView();
+            }
+        }
+        catch (Exception ex)
+        {
+            StatusText = $"ブックマーク編集エラー: {ex.Message}";
+        }
+    }
+
+    private void NavigateToBookmark(object? bookmarkObj)
+    {
+        if (bookmarkObj is BookmarkItem bookmark)
         {
             Navigate(bookmark.Url);
         }
     }
 
-    private void RemoveBookmark(BookmarkItem? bookmark)
+    private void RemoveBookmark(object? bookmark)
     {
-        if (bookmark is not BookmarkItem bookmarkToRemove) return;
+        if (bookmark is not BookmarkItem bookmarkItem) return;
 
-        var result = System.Windows.MessageBox.Show(
-            $"ブックマーク「{bookmarkToRemove.Name}」を削除しますか？",
-            "確認",
-            System.Windows.MessageBoxButton.YesNo,
-            System.Windows.MessageBoxImage.Question);
-
-        if (result == System.Windows.MessageBoxResult.Yes)
+        try
         {
-            if (Bookmarks.Contains(bookmarkToRemove))
+            var result = MessageBox.Show(
+                $"ブックマーク「{bookmarkItem.Name}」を削除しますか？",
+                "確認",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Question);
+
+            if (result == MessageBoxResult.Yes)
             {
-                Bookmarks.Remove(bookmarkToRemove);
+                if (Bookmarks.Contains(bookmarkItem))
+                {
+                    var groupId = bookmarkItem.GroupId;
+                    Bookmarks.Remove(bookmarkItem);
+
+                    var groupBookmarks = Bookmarks.Where(b => b.GroupId == groupId).OrderBy(b => b.Order).ToList();
+                    for (int i = 0; i < groupBookmarks.Count; i++)
+                    {
+                        groupBookmarks[i].Order = i;
+                    }
+
+                    StatusText = "ブックマークが削除されました";
+                    UpdateBookmarkBarView();
+                }
             }
+        }
+        catch (Exception ex)
+        {
+            StatusText = $"ブックマーク削除エラー: {ex.Message}";
+        }
+    }
+
+    private void NavigateToHistory(HistoryItem? historyItem)
+    {
+        if (historyItem != null)
+        {
+            Navigate(historyItem.Url);
+        }
+    }
+
+    private void ClearHistory()
+    {
+        var result = MessageBox.Show(
+            "履歴をすべて削除しますか？",
+            "確認",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Question);
+
+        if (result == MessageBoxResult.Yes)
+        {
+            History.Clear();
+            StatusText = "履歴がクリアされました";
         }
     }
 
@@ -252,11 +525,98 @@ public class BrowserViewModel : INotifyPropertyChanged
             {
                 using var fileStream = System.IO.File.Create(saveDialog.FileName);
                 await _webView.CoreWebView2.CapturePreviewAsync(CoreWebView2CapturePreviewImageFormat.Png, fileStream);
+                StatusText = "スクリーンショットが保存されました";
             }
         }
         catch (Exception ex)
         {
-            System.Windows.MessageBox.Show($"スクリーンショットの保存に失敗しました: {ex.Message}");
+            MessageBox.Show($"スクリーンショットの保存に失敗しました: {ex.Message}");
+            StatusText = "スクリーンショットの保存に失敗";
+        }
+    }
+
+    private async void ViewSource()
+    {
+        if (_webView?.CoreWebView2 == null) return;
+
+        try
+        {
+            var source = await _webView.CoreWebView2.ExecuteScriptAsync("document.documentElement.outerHTML");
+
+            var sourceWindow = new Window
+            {
+                Title = "ページソース",
+                Width = 800,
+                Height = 600,
+                WindowStartupLocation = WindowStartupLocation.CenterOwner,
+                Owner = Application.Current.MainWindow
+            };
+
+            var textBox = new TextBox
+            {
+                Text = source.Trim('"').Replace("\\n", "\n").Replace("\\\"", "\""),
+                IsReadOnly = true,
+                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
+                FontFamily = new FontFamily("Consolas"),
+                FontSize = 12,
+                TextWrapping = TextWrapping.NoWrap
+            };
+
+            sourceWindow.Content = textBox;
+            sourceWindow.Show();
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"ソース表示エラー: {ex.Message}", "エラー",
+                MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    private void AddBookmarkGroup()
+    {
+        var inputDialog = new GroupInputDialog()
+        {
+            Owner = Application.Current.MainWindow
+        };
+
+        if (inputDialog.ShowDialog() == true && !string.IsNullOrWhiteSpace(inputDialog.GroupName))
+        {
+            var group = new BookmarkGroup
+            {
+                Name = inputDialog.GroupName.Trim(),
+                Order = BookmarkGroups.Count
+            };
+
+            BookmarkGroups.Add(group);
+            StatusText = "ブックマークグループが追加されました";
+        }
+    }
+
+    private void RemoveBookmarkGroup(BookmarkGroup? group)
+    {
+        if (group == null) return;
+
+        var bookmarksInGroup = Bookmarks.Where(b => b.GroupId == group.Id).ToList();
+
+        var message = bookmarksInGroup.Any()
+            ? $"グループ「{group.Name}」とその中のブックマーク{bookmarksInGroup.Count}個を削除しますか？"
+            : $"グループ「{group.Name}」を削除しますか？";
+
+        var result = MessageBox.Show(
+            message,
+            "確認",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Question);
+
+        if (result == MessageBoxResult.Yes)
+        {
+            foreach (var bookmark in bookmarksInGroup)
+            {
+                Bookmarks.Remove(bookmark);
+            }
+            BookmarkGroups.Remove(group);
+            StatusText = "ブックマークグループが削除されました";
         }
     }
 
@@ -276,5 +636,299 @@ public class BrowserViewModel : INotifyPropertyChanged
     protected virtual void OnPropertyChanged([CallerMemberName] string? propertyName = null)
     {
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+    }
+}
+
+public class RelayCommand : ICommand
+{
+    private readonly Action<object?> _execute;
+    private readonly Func<object?, bool>? _canExecute;
+
+    public RelayCommand(Action<object?> execute, Func<object?, bool>? canExecute = null)
+    {
+        _execute = execute ?? throw new ArgumentNullException(nameof(execute));
+        _canExecute = canExecute;
+    }
+
+    public bool CanExecute(object? parameter) => _canExecute?.Invoke(parameter) ?? true;
+
+    public void Execute(object? parameter) => _execute(parameter);
+
+    public event EventHandler? CanExecuteChanged
+    {
+        add => CommandManager.RequerySuggested += value;
+        remove => CommandManager.RequerySuggested -= value;
+    }
+}
+
+public class BookmarkInputDialog : Window
+{
+    private readonly TextBox nameTextBox = new();
+    private readonly TextBox urlTextBox = new();
+    private readonly ComboBox groupComboBox = new();
+    private readonly Button okButton = new();
+
+    public string BookmarkName => nameTextBox.Text;
+    public string BookmarkUrl => urlTextBox.Text;
+    public BookmarkGroup? SelectedGroup => groupComboBox.SelectedItem as BookmarkGroup;
+
+    public BookmarkInputDialog(BookmarkItem? bookmark = null)
+    {
+        Title = bookmark == null ? "ブックマーク追加" : "ブックマーク編集";
+        Width = 480;
+        Height = 220;
+        WindowStartupLocation = WindowStartupLocation.CenterOwner;
+        ResizeMode = ResizeMode.NoResize;
+        Background = new SolidColorBrush(SystemColors.ControlColor);
+
+        var grid = new Grid { Margin = new Thickness(15) };
+        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+        var nameLabel = new Label
+        {
+            Content = "名前:",
+            Margin = new Thickness(0, 0, 10, 5),
+            VerticalAlignment = VerticalAlignment.Center,
+            Foreground = new SolidColorBrush(SystemColors.ControlTextColor)
+        };
+        Grid.SetRow(nameLabel, 0);
+        Grid.SetColumn(nameLabel, 0);
+        grid.Children.Add(nameLabel);
+
+        nameTextBox.Margin = new Thickness(0, 0, 0, 10);
+        nameTextBox.Height = 25;
+        nameTextBox.VerticalContentAlignment = VerticalAlignment.Center;
+        nameTextBox.Background = new SolidColorBrush(SystemColors.WindowColor);
+        nameTextBox.Foreground = new SolidColorBrush(SystemColors.WindowTextColor);
+        nameTextBox.BorderBrush = new SolidColorBrush(SystemColors.ActiveBorderColor);
+        nameTextBox.BorderThickness = new Thickness(1);
+        Grid.SetRow(nameTextBox, 0);
+        Grid.SetColumn(nameTextBox, 1);
+        grid.Children.Add(nameTextBox);
+
+        var urlLabel = new Label
+        {
+            Content = "URL:",
+            Margin = new Thickness(0, 0, 10, 5),
+            VerticalAlignment = VerticalAlignment.Center,
+            Foreground = new SolidColorBrush(SystemColors.ControlTextColor)
+        };
+        Grid.SetRow(urlLabel, 1);
+        Grid.SetColumn(urlLabel, 0);
+        grid.Children.Add(urlLabel);
+
+        urlTextBox.Margin = new Thickness(0, 0, 0, 10);
+        urlTextBox.Height = 25;
+        urlTextBox.VerticalContentAlignment = VerticalAlignment.Center;
+        urlTextBox.Background = new SolidColorBrush(SystemColors.WindowColor);
+        urlTextBox.Foreground = new SolidColorBrush(SystemColors.WindowTextColor);
+        urlTextBox.BorderBrush = new SolidColorBrush(SystemColors.ActiveBorderColor);
+        urlTextBox.BorderThickness = new Thickness(1);
+        Grid.SetRow(urlTextBox, 1);
+        Grid.SetColumn(urlTextBox, 1);
+        grid.Children.Add(urlTextBox);
+
+        var groupLabel = new Label
+        {
+            Content = "グループ:",
+            Margin = new Thickness(0, 0, 10, 5),
+            VerticalAlignment = VerticalAlignment.Center,
+            Foreground = new SolidColorBrush(SystemColors.ControlTextColor)
+        };
+        Grid.SetRow(groupLabel, 2);
+        Grid.SetColumn(groupLabel, 0);
+        grid.Children.Add(groupLabel);
+
+        groupComboBox.Background = new SolidColorBrush(SystemColors.WindowColor);
+        groupComboBox.Foreground = new SolidColorBrush(SystemColors.WindowTextColor);
+        groupComboBox.BorderBrush = new SolidColorBrush(SystemColors.ActiveBorderColor);
+        groupComboBox.BorderThickness = new Thickness(1);
+        groupComboBox.Margin = new Thickness(0, 0, 0, 10);
+        groupComboBox.Height = 25;
+        groupComboBox.ItemsSource = BrowserSettings.Default.BookmarkGroups;
+        groupComboBox.DisplayMemberPath = "Name";
+        Grid.SetRow(groupComboBox, 2);
+        Grid.SetColumn(groupComboBox, 1);
+        grid.Children.Add(groupComboBox);
+
+        var buttonPanel = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            HorizontalAlignment = HorizontalAlignment.Right,
+            Margin = new Thickness(0, 15, 0, 0)
+        };
+        Grid.SetRow(buttonPanel, 4);
+        Grid.SetColumn(buttonPanel, 1);
+
+        okButton.Content = bookmark == null ? "追加" : "保存";
+        okButton.Width = 70;
+        okButton.Height = 28;
+        okButton.Margin = new Thickness(0, 0, 10, 0);
+        okButton.IsDefault = true;
+        okButton.Click += (s, e) =>
+        {
+            if (string.IsNullOrWhiteSpace(nameTextBox.Text) || string.IsNullOrWhiteSpace(urlTextBox.Text))
+            {
+                MessageBox.Show("名前とURLを入力してください。", "入力エラー",
+                    MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+            DialogResult = true;
+            Close();
+        };
+        buttonPanel.Children.Add(okButton);
+
+        var cancelButton = new Button
+        {
+            Content = "キャンセル",
+            Width = 80,
+            Height = 28,
+            IsCancel = true
+        };
+        cancelButton.Click += (s, e) => { DialogResult = false; Close(); };
+        buttonPanel.Children.Add(cancelButton);
+
+        grid.Children.Add(buttonPanel);
+        Content = grid;
+
+        if (bookmark != null)
+        {
+            nameTextBox.Text = bookmark.Name;
+            urlTextBox.Text = bookmark.Url;
+            var group = BrowserSettings.Default.BookmarkGroups.FirstOrDefault(g => g.Id == bookmark.GroupId);
+            if (group != null)
+            {
+                groupComboBox.SelectedItem = group;
+            }
+        }
+        else if (BrowserSettings.Default.BookmarkGroups.Any())
+        {
+            groupComboBox.SelectedIndex = 0;
+        }
+
+        nameTextBox.Focus();
+        nameTextBox.SelectAll();
+
+        var highlightBrush = SystemColors.HighlightBrush;
+        var defaultBorderBrush = new SolidColorBrush(SystemColors.ActiveBorderColor);
+
+        Action<Control> setFocusHandlers = (control) =>
+        {
+            control.GotFocus += (s, e) => control.BorderBrush = highlightBrush;
+            control.LostFocus += (s, e) => control.BorderBrush = defaultBorderBrush;
+        };
+
+        setFocusHandlers(nameTextBox);
+        setFocusHandlers(urlTextBox);
+        setFocusHandlers(groupComboBox);
+    }
+}
+
+public class GroupInputDialog : Window
+{
+    private readonly TextBox nameTextBox = new();
+
+    public string GroupName => nameTextBox.Text;
+
+    public GroupInputDialog(BookmarkGroup? group = null)
+    {
+        Title = group == null ? "グループ追加" : "グループ編集";
+        Width = 350;
+        Height = 150;
+        WindowStartupLocation = WindowStartupLocation.CenterOwner;
+        ResizeMode = ResizeMode.NoResize;
+        Background = new SolidColorBrush(SystemColors.ControlColor);
+
+        var grid = new Grid { Margin = new Thickness(15) };
+        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+        var nameLabel = new Label
+        {
+            Content = "グループ名:",
+            Margin = new Thickness(0, 0, 10, 5),
+            VerticalAlignment = VerticalAlignment.Center,
+            Foreground = new SolidColorBrush(SystemColors.ControlTextColor)
+        };
+        Grid.SetRow(nameLabel, 0);
+        Grid.SetColumn(nameLabel, 0);
+        grid.Children.Add(nameLabel);
+
+        nameTextBox.Margin = new Thickness(0, 0, 0, 10);
+        nameTextBox.Height = 25;
+        nameTextBox.VerticalContentAlignment = VerticalAlignment.Center;
+        nameTextBox.Background = new SolidColorBrush(SystemColors.WindowColor);
+        nameTextBox.Foreground = new SolidColorBrush(SystemColors.WindowTextColor);
+        Grid.SetRow(nameTextBox, 0);
+        Grid.SetColumn(nameTextBox, 1);
+        grid.Children.Add(nameTextBox);
+
+        var buttonPanel = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            HorizontalAlignment = HorizontalAlignment.Right,
+            Margin = new Thickness(0, 15, 0, 0)
+        };
+        Grid.SetRow(buttonPanel, 2);
+        Grid.SetColumn(buttonPanel, 1);
+
+        var okButton = new Button
+        {
+            Content = group == null ? "追加" : "保存",
+            Width = 70,
+            Height = 28,
+            Margin = new Thickness(0, 0, 10, 0),
+            IsDefault = true
+        };
+        okButton.Click += (s, e) =>
+        {
+            if (string.IsNullOrWhiteSpace(nameTextBox.Text))
+            {
+                MessageBox.Show("グループ名を入力してください。", "入力エラー",
+                    MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+            DialogResult = true;
+            Close();
+        };
+        buttonPanel.Children.Add(okButton);
+
+        var cancelButton = new Button
+        {
+            Content = "キャンセル",
+            Width = 80,
+            Height = 28,
+            IsCancel = true
+        };
+        cancelButton.Click += (s, e) => { DialogResult = false; Close(); };
+        buttonPanel.Children.Add(cancelButton);
+
+        grid.Children.Add(buttonPanel);
+        Content = grid;
+
+        if (group != null)
+        {
+            nameTextBox.Text = group.Name;
+        }
+
+        nameTextBox.Focus();
+        nameTextBox.SelectAll();
+
+        nameTextBox.KeyDown += (s, e) =>
+        {
+            if (e.Key == Key.Enter)
+            {
+                okButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            }
+        };
     }
 }
